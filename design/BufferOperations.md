@@ -40,7 +40,7 @@ Buffers have an internal state machine that has three states:
 
 In the following a buffer's state is a shorthand for the buffer's state machine.
 Buffers created with `GPUDevice.createBuffer` start in the unmapped state.
-Buffers created with `GPUDevice.createBufferMapped` or `GPUDevice.createBufferMappedAsync` start in the mapped state.
+Buffers created with `GPUDevice.createBufferMapped` start in the mapped state.
 
 State transitions are the following:
 
@@ -100,12 +100,10 @@ A buffer can be created already mapped:
 ```webidl
 partial interface GPUDevice {
     (GPUBuffer, ArrayBuffer) createBufferMapped(GPUBufferDescriptor descriptor);
-    Promise<(GPUBuffer, ArrayBuffer)> createBufferMappedAsync(GPUBufferDescriptor descriptor);
 };
 ```
 
 `GPUDevice.createBufferMapped` returns a buffer in the mapped state along with an write mapping representing the whole range of the buffer.
-`GPUDevice.createBufferMappedAsync` returns the same values as a promise and provides more opportunities for optimization in implementations of the API.
 
 These entry points do not require the `MAP_WRITE` usage to be specified.
 The `MAP_WRITE` usage may be specified if the buffer needs to be re-mappable later on.
@@ -119,7 +117,7 @@ The mapping starts filled with zeros.
 ```js
 const readPixelsBuffer = device.createBuffer({
     size: 4,
-    usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.TRANSFER_DST,
+    usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
 });
 
 // Commands copying a pixel from a texture into readPixelsBuffer are submitted
@@ -140,7 +138,7 @@ const size = model.computeVertexBufferSize();
 
 const stagingVertexBuffer = device.createBuffer({
     size: size,
-    usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.TRANSFER_SRC,
+    usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.COPY_SRC,
 });
 
 stagingVertexBuffer.mapWriteAsync().then((stagingData) => {
@@ -159,7 +157,7 @@ function bufferSubData(device, destBuffer, destOffset, srcArrayBuffer) {
     const byteCount = srcArrayBuffer.byteLength;
     const [srcBuffer, arrayBuffer] = device.createBufferMapped({
         size: byteCount,
-        usage: GPUBufferUsage.TRANSFER_SRC
+        usage: GPUBufferUsage.COPY_SRC
     });
     new Uint8Array(arrayBuffer).set(new Uint8Array(srcArrayBuffer)); // memcpy
     srcBuffer.unmap();
@@ -167,7 +165,7 @@ function bufferSubData(device, destBuffer, destOffset, srcArrayBuffer) {
     const encoder = device.createCommandEncoder();
     encoder.copyBufferToBuffer(srcBuffer, 0, destBuffer, destOffset, byteCount);
     const commandBuffer = encoder.finish();
-    const queue = device.getQueue();
+    const queue = device.defaultQueue;
     queue.submit([commandBuffer]);
 
     srcBuffer.destroy();
@@ -183,14 +181,14 @@ upload buffers:
 
 ```js
 function AutoRingBuffer(device, chunkSize) {
-    const queue = device.getQueue();
+    const queue = device.defaultQueue;
     let availChunks = [];
 
     function Chunk() {
         const size = chunkSize;
         const [buf, initialMap] = this.device.createBufferMapped({
             size: size,
-            usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.TRANSFER_SRC,
+            usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.COPY_SRC,
         });
 
         let mapTyped;
